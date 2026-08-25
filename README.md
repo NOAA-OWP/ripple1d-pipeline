@@ -1,105 +1,168 @@
-#### OWP Open Source Project Template Instructions
+# Ripple1D Pipeline
+ 
+Ripple1D Pipeline is a workflow that utilizes the [Ripple1d](https://github.com/Dewberry/ripple1d) to generate FIMs and rating curves. 
+Compatible with ripple1d==0.10.4. Use repository tags to get older versions.
 
-1. Create a new project.
-2. [Copy these files into the new project](#installation)
-3. Update the README, replacing the contents below as prescribed.
-4. Add any libraries, assets, or hard dependencies whose source code will be included
-   in the project's repository to the _Exceptions_ section in the [TERMS](TERMS.md).
-  - If no exceptions are needed, remove that section from TERMS.
-5. If working with an existing code base, answer the questions on the [open source checklist](opensource-checklist.md)
-6. Delete these instructions and everything up to the _Project Title_ from the README.
-7. Write some great software and tell people about it.
-
-> Keep the README fresh! It's the first thing people see and will make the initial impression.
-
-## Installation
-
-To install all of the template files, run the following script from the root of your project's directory:
-
-```
-bash -c "$(curl -s https://raw.githubusercontent.com/NOAA-OWP/owp-open-source-project-template/open_source_template.sh)"
-```
-
-----
-
-# Project Title
-
-**Description**:  Put a meaningful, short, plain-language description of what
-this project is trying to accomplish and why it matters.
-Describe the problem(s) this project solves.
-Describe how this software can improve the lives of its audience.
-
-Other things to include:
-
-  - **Technology stack**: Indicate the technological nature of the software, including primary programming language(s) and whether the software is intended as standalone or as a module in a framework or other ecosystem.
-  - **Status**:  Alpha, Beta, 1.1, etc. It's OK to write a sentence, too. The goal is to let interested people know where this project is at. This is also a good place to link to the [CHANGELOG](CHANGELOG.md).
-  - **Links to production or demo instances**
-  - Describe what sets this apart from related-projects. Linking to another doc or page is OK if this can't be expressed in a sentence or two.
-
-
-**Screenshot**: If the software has visual components, place a screenshot after the description; e.g.,
-
-![](https://raw.githubusercontent.com/NOAA-OWP/owp-open-source-project-template/master/doc/Screenshot.png)
+## Contents
+- [Initialization/Pre Processing source code](src/setup)
+- [Ripple1d API Calls/Processing source code](src/process)
+- [Quality Control/Post Processing source code](src/qc)
 
 
 ## Dependencies
+ - Windows environment with Desktop Experience (GUI, not headless Windows)
+ - Python version >=3.10 
+ - [Ripple1d](https://github.com/Dewberry/ripple1d)
+ - HEC-RAS (v6.3.1)
+ - GDAL
+ - [Flows2fim](https://github.com/ar-siddiqui/flows2fim) (if creating composite rasters)
+ - AWS profile in `~\.aws\config` which includes valid AWS credentials (access key id and secret access key).
 
-Describe any dependencies that must be installed for this software to work.
-This includes programming languages, databases or other storage mechanisms, build tools, frameworks, and so forth.
-If specific versions of other software are required, or known not to work, call that out.
+## Getting Started
 
-## Installation
-
-Detailed instructions on how to install, configure, and get the project running.
-This should be frequently tested to ensure reliability. Alternatively, link to
-a separate [INSTALL](INSTALL.md) document.
-
-## Configuration
-
-If the software is configurable, describe it in detail, either here or in other documentation to which you link.
-
-## Usage
-
-Show users how to use the software.
-Be specific.
-Use appropriate formatting when showing code snippets.
-
-## How to test the software
-
-If the software includes automated tests, detail how to run those tests.
-
-## Known issues
-
-Document any known significant shortcomings with the software.
-
-## Getting help
-
-Instruct users how to get help with this software; this might include links to an issue tracker, wiki, mailing list, etc.
-
-**Example**
-
-If you have questions, concerns, bug reports, etc, please file an issue in this repository's Issue Tracker.
-
-## Getting involved
-
-This section should detail why people should get involved and describe key areas you are
-currently focusing on; e.g., trying to get feedback on features, fixing certain bugs, building
-important pieces, etc.
-
-General instructions on _how_ to contribute should be stated with a link to [CONTRIBUTING](CONTRIBUTING.md).
+### 1. **Checkout the Repo**
+   - Clone this repository to your local machine.  
+   ```git clone https://gitlab.sh.nextgenwaterprediction.com/NGWPC/ripple1d-pipeline C:\Users\<username>\Downloads\ripple1d-pipeline```
 
 
-----
+### 2. **Create a Virtual Environment**
+   - Create a virtual environment in Python:
+     - **Windows:**
+     ```Powershell
+     cd C:\venvs *OR* mkdir C:\venvs 
+     python3 -m venv ripple1d_pipeline
+     ```
+     - **Linux**
+     ```bash
+     mkdir -p /venvs && cd /venvs
+     python3 -m venv ripple1d_pipeline
+     ```
 
-## Open source licensing info
-1. [TERMS](TERMS.md)
-2. [LICENSE](LICENSE)
+### 3. **Activate the Virtual Environment**
+   - **Windows:**
+     ```Powershell
+     ripple1d_pipeline\Scripts\activate
+     ```
+   - **Linux:**
+     ```bash
+     source ripple1d_pipeline/bin/activate
+     ```
+
+### 4. **Navigate to the Root of the Repo**
+   - Use your terminal to navigate to the root folder of the repository:
+   - **Windows:**
+     ```Powershell
+     cd /d <path\to\your\repo from step 1>
+     ```
+   - **Linux:**
+     ```bash
+     cd <path/to/your/repo from step 1>
+     ```
+
+### 5. **Install Requirements**
+   - Install the necessary dependencies in your virtual environment:
+     ```bash
+     pip install -r requirements.txt
+     ```
+
+### 6. **Set up and start Ripple1D Server** 
+The Ripple1d server must be installed and ran on a windows machine, with HEC-Ras installed.   
+   - Create ripple1d virtual environment, activate, install ripple1d, start ripple1d.
+      ```Powershell
+      cd /d C:\venvs
+      python3 -m venv ripple1d_<ripple1d version>
+      cd ripple1d_<ripple1d version>
+      .\Scripts\activate
+      pip install ripple1d==<ripple1d version>
+      ripple1d start --thread_count <number less than total available CPUs>
+      ```
+If the last command is successful, two new terminal windows will appear (Huey consumer and Flask api), which can be minimized. 
+
+### 7. **Install GDAL**
+The easiest way is to download the [OSGeo4W network installer](https://download.osgeo.org/osgeo4w/v2/osgeo4w-setup.exe), this aligns with the current default paths listed in `config.yaml`.
+
+### 8. **Install flows2fim**
+1. Download the [flows2fim zip](https://github.com/ar-siddiqui/flows2fim/releases/download/v0.2.1/flows2fim-windows-amd64.zip)
+2. Extract the .zip file's contents to `C:\OSGeo4W\bin\`
+
+   ###  **Pull flow files**
+   ```Powershell
+   mkdir C:\reference_data\flow_files
+   aws s3 sync s3://fimc-data/reference/nwm_return_period_flows C:\reference_data\flow_files
+   ```
+
+### 9. **Install HEC-RAS**
+1. Download the [HEC-RAS v631 Setup executable](https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/1.0.26/HEC-RAS_631_Setup.exe)
+2. Follow the install instructions, all default. 
+3. Open HEC-RAS once to accept the Terms and Conditions. 
+
+### Notes on Setup:
+- Using a Linux Operating System is untested.
+- It is highly recommended to run all steps using the Windows Command Prompt Application, not the Windonws PowerShell application.
+
+## **Configuration**
+### Environment file
+An `example.env` file is included within the root directory. First, make a copy of `example.env`, naming it `.env`. Then, update the values in the `.env` file.
+
+### Configuration file 
+
+The `config.yaml` file in the `/src` directory contains all other necessary configuration parameters. Please ensure filepaths, timeouts, endpoints, etc are up to date for your machine, and if not, modify the file to suit your specific requirements. 
 
 
-----
+## **Using `batch_ripple_pipeline.py` or `ripple_pipeline.py`**
 
-## Credits and references
+The automation of the whole pipeline can be accomplished using one of two scripts. `ripple_pipeline.py` is used to process a single colelction, identically to the Jupyter Notebook steps. `batch_ripple_pipeline.py` is a wrapper around `ripple_pipeline.py` which will serially process a list (or single) of collections, as well as push the data to a specified S3 bucket. 
 
-1. Projects that inspired you
-2. Related projects
-3. Books, papers, talks, or other sources that have meaningful impact or influence on this project
+For Example:
+```Powershell
+(ripple1d_pipeline) C:\Users\<user name>\ripple1d_pipeline>python .\ripple_pipeline.py -c mip_02060004
+```
+
+or 
+
+```Powershell
+(ripple1d_pipeline) C:\Users\<user name>\ripple1d_pipeline>python .\batch_ripple_pipeline.py -l "C:\collection_lists\test_collections.lst"
+```
+
+## **Using Jupyter Notebooks**
+
+### 1. **Access Notebooks**
+   - **Option 1: Using VSCode**
+     1. Open the notebook in VSCode.
+     2. Point the kernel to the IPython kernel in your virtual environment.
+
+   - **Option 2: Using Jupyter Lab**
+     1. Start Jupyter Lab from your virtual environment:
+        ```bash
+        jupyter lab
+        ```
+     2. Open `localhost:8888` in your browser to access Jupyter Lab and open the notebooks.
+
+### 2. **Update Notebooks Parameters**
+   - In the parameters cell of the notebooks, define the `collection_name` variable to the collection you'd like to process.
+
+### 3. **Execute and Export Notebooks as HTML**
+   - Execute `setup_<collection_name>.ipynb` first and then `process_<collection_name>.ipynb` and finally `qc_<collection_name>.ipynb`
+   - Once the notebooks are executed, export them as HTML files and move them into the working folder created for the collection.
+
+### 4. **(Optional) Send for Quality Review**
+   - After exporting, send the entire working folder for quality review.
+
+## Outputs
+Following outputs are produced for each batch that is processed:
+
+`source_models`: Folder containing source models data, which were conflated and used as source for creating submodels for NWM reaches
+
+`submodels`: Folders for extracted HEC-RAS submodels for NWM reaches that are used to create FIMs
+
+`library`: Folder containing FIM rasters per reach and per flow and downstream boundary condition
+
+`qc`: Folder containing data to evaluate quality of produced FIM library and rating curves
+
+`error_report.xlsx`: Provide insight into the errors encountered during processing of each step
+
+`ripple.gpkg`: Geopackage (SQLITE Database) containing records for reaches, models and rating curves
+
+`start_reaches.csv`: Flows2FIM start file which can be used to create composite FIMs using Flows2FIM software
+
+---

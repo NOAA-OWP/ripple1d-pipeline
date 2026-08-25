@@ -1,0 +1,142 @@
+---
+
+RIPPLE1D_VERSION: 0.10.4
+
+paths:
+  COLLECTIONS_ROOT_DIR: C:\collections
+  NWM_FLOWLINES_PATH: C:\reference_data\nwm_flowlines.parquet
+  S3_UPLOAD_PREFIX: "" # Exclude trailing slash of S3 Bucket
+  S3_UPLOAD_FAILED_PREFIX: "" # Exclude trailing slash of S3 Bucket
+  MONITORING_DB_PATH: Z:\shared\monitoring.sqlite
+
+ripple_settings:
+  RAS_VERSION: &RAS_VERSION "631"
+  US_DEPTH_INCREMENT: &US_DEPTH_INCREMENT 0.5
+  DS_DEPTH_INCREMENT: &DS_DEPTH_INCREMENT 1
+  RESOLUTION: &RESOLUTION 3.0
+  RESOLUTION_UNITS: &RESOLUTION_UNITS "Meters"
+  TERRAIN_SOURCE_URL: &TERRAIN_SOURCE_URL C:\reference_data\dem\seamless_3dep_dem_3m_5070.vrt
+  SOURCE_NETWORK: &SOURCE_NETWORK C:\reference_data\nwm_flowlines_with_bbox.parquet
+  SOURCE_NETWORK_VERSION:  &SOURCE_NETWORK_VERSION "2.1"
+  SOURCE_NETWORK_TYPE: &SOURCE_NETWORK_TYPE "nwm_hydrofabric"
+
+processing_steps:
+  conflate_model:
+    domain: "model"
+    api_process_name: "conflate_model"
+    payload_template:
+      source_model_directory: "{source_model_directory}\\{model_id}"
+      model_name: "{model_name}"
+      source_network:
+        file_name: *SOURCE_NETWORK
+        version: *SOURCE_NETWORK_VERSION
+        type: *SOURCE_NETWORK_TYPE
+      min_flow_multiplier: 0.9
+      max_flow_multiplier: 1.5
+
+  extract_submodel:
+    domain: "reach"
+    api_process_name: "extract_submodel"
+    payload_template:
+      source_model_directory: "{source_model_directory}\\{model_id}"
+      model_name: "{model_name}"
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      nwm_id: "{nwm_reach_id}"
+      min_flow_multiplier_ras: 1
+      max_flow_multiplier_ras: 1.2
+
+  create_ras_terrain:
+    domain: "reach"
+    api_process_name: "create_ras_terrain"  # Different api_process_name
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      resolution: *RESOLUTION
+      resolution_units: *RESOLUTION_UNITS
+      terrain_source_url: *TERRAIN_SOURCE_URL
+      terrain_agreement_ignore_error: True
+
+  create_model_run_normal_depth:
+    domain: "reach"
+    api_process_name: "create_model_run_normal_depth"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plan_suffix: "ind"
+      num_of_discharges_for_initial_normal_depth_runs: 15
+      ras_version: *RAS_VERSION
+
+  run_incremental_normal_depth:
+    domain: "reach"
+    api_process_name: "run_incremental_normal_depth"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plan_suffix: "nd"
+      depth_increment: *US_DEPTH_INCREMENT
+      ras_version: *RAS_VERSION
+
+  nd_create_rating_curves_db:
+    domain: "reach"
+    api_process_name: "create_rating_curves_db"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plans: ["nd"]
+
+  run_iknown_wse:
+    domain: "reach"
+
+  ikwse_create_rating_curves_db:
+    domain: "reach"
+
+  run_known_wse:
+    domain: "reach"
+    api_process_name: "run_known_wse"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plan_suffix: "kwse"
+      min_elevation: -9999
+      max_elevation: -9999
+      depth_increment: *DS_DEPTH_INCREMENT
+      ras_version: *RAS_VERSION
+      write_depth_grids: True
+
+  kwse_create_rating_curves_db:
+    domain: "reach"
+    api_process_name: "create_rating_curves_db"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plans: ["kwse"]
+
+  create_fim_lib:
+    domain: "reach"
+    api_process_name: "create_fim_lib"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plans:
+        - nd
+        - kwse
+      resolution: *RESOLUTION
+      resolution_units: *RESOLUTION_UNITS
+      library_directory: "{library_directory}"
+      cleanup: True
+      cog: True
+
+flows2fim:
+  FLOW_FILES_DIR: C:\reference_data\flow_files
+  FLOWS2FIM_BIN_PATH: C:\OSGeo4W\bin\flows2fim.exe
+  GDAL_BINS_PATH: C:\OSGeo4W\bin
+  GDAL_SCRIPTS_PATH: C:\OSGeo4W\apps\Python312\Scripts
+
+qc:
+  QC_TEMPLATE_QGIS_FILE: C:\reference_data\qc_map.qgs
+
+polling:
+  DEFAULT_POLL_WAIT: 5
+  API_LAUNCH_JOBS_RETRY_WAIT: 0.5
+
+database:
+  DB_CONN_TIMEOUT: 30
+
+execution:
+  stop_on_error: False
+  OPTIMUM_PARALLEL_PROCESS_COUNT: 22  # Rule of thumb - use half the cores available.
+
+...
