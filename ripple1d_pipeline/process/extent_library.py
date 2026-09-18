@@ -1,13 +1,9 @@
 """
 Create Extent library from Depth library using GDAL operations.
 After profiling, it is found that the optimum parallel process count is same number as CPU cores.
-But the performance max out at 16 cores.
 This script is compute intensive and not memory intensive.
-Todo: On windows when working with VSI, update the script to use .as_posix().
-On windows max cpu count can be 61
 """
 
-import argparse
 import logging
 import multiprocessing
 import os
@@ -16,7 +12,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-from osgeo import gdal
+from ..setup.collection_data import CollectionData
+
+logger = logging.getLogger(__name__)
 
 
 def create_extent_tif(tif_path: Path, tmp_dir: Path, dest_dir: Path) -> None:
@@ -31,8 +29,8 @@ def create_extent_tif(tif_path: Path, tmp_dir: Path, dest_dir: Path) -> None:
     tmp_tif = tmp_dir / f"tmp_{tif_path.stem}.tif"
     dest_tif = dest_dir / f"{tif_path.stem}.tif"
 
-    if gdal.VSIStatL(str(dest_tif)) is not None:
-        logging.debug(f"Destination path {dest_tif} already exists. Skipping.")
+    if dest_tif.exists():
+        logger.debug(f"Destination file {dest_tif} exists. Skipping processing.")
         return
 
     gdal_calc_cmd = [
@@ -47,16 +45,16 @@ def create_extent_tif(tif_path: Path, tmp_dir: Path, dest_dir: Path) -> None:
 
     result = subprocess.run(gdal_calc_cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        logging.debug(f"gdal_calc stdout: {result.stdout}")
-        logging.error(f"gdal_calc stderr: {result.stderr}")
-        logging.debug(" ".join(gdal_calc_cmd))
+        logger.debug(f"gdal_calc stdout: {result.stdout}")
+        logger.error(f"gdal_calc stderr: {result.stderr}")
+        logger.debug(" ".join(gdal_calc_cmd))
         raise RuntimeError(f"gdal_calc failed for {tif_path}")
 
     if not os.path.exists(tmp_tif):
-        logging.error(f"Temporary file {tmp_tif} not created!")
+        logger.error(f"Temporary file {tmp_tif} not created!")
         raise FileNotFoundError(f"{tmp_tif} not created")
 
-    # Translate to COG, COG format can't be created with gdal_calc dircetly
+    # Translate to COG, COG format can't be created with gdal_calc
     gdal_translate_cmd = [
         "gdal_translate",
         "-of",
@@ -68,11 +66,13 @@ def create_extent_tif(tif_path: Path, tmp_dir: Path, dest_dir: Path) -> None:
     # Execute gdalwarp with output redirection
     result = subprocess.run(gdal_translate_cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        logging.debug(f"gdal_translate stdout: {result.stdout}")
-        logging.error(f"gdal_translate stderr: {result.stderr}")
-        logging.debug(" ".join(gdal_calc_cmd))
-        logging.debug(" ".join(gdal_translate_cmd))
+        logger.debug(f"gdal_translate stdout: {result.stdout}")
+        logger.error(f"gdal_translate stderr: {result.stderr}")
+        logger.debug(" ".join(gdal_calc_cmd))
+        logger.debug(" ".join(gdal_translate_cmd))
 
+        if os.path.exists(dest_tif):  # clean up
+            os.remove(dest_tif)
         raise RuntimeError(f"gdal_translate failed for {tif_path}")
 
 
@@ -89,8 +89,8 @@ def create_domain_tif(tif_path: Path, tmp_dir: Path, gpkg_path: Path, dest_dir: 
     tmp_tif = tmp_dir / "tmp_domain.tif"
     dest_tif = dest_dir / "domain.tif"
 
-    if gdal.VSIStatL(str(dest_tif)) is not None:
-        logging.debug(f"Destination path {dest_tif} already exists. Skipping.")
+    if dest_tif.exists():
+        logger.debug(f"Domain file {dest_tif} exists. Skipping processing.")
         return
 
     # create a temporary raster with same extents as all other to burn xs_concave_hull
@@ -106,13 +106,13 @@ def create_domain_tif(tif_path: Path, tmp_dir: Path, gpkg_path: Path, dest_dir: 
 
     result = subprocess.run(gdal_calc_cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        logging.debug(f"gdal_calc stdout: {result.stdout}")
-        logging.error(f"gdal_calc stderr: {result.stderr}")
-        logging.debug(" ".join(gdal_calc_cmd))
+        logger.debug(f"gdal_calc stdout: {result.stdout}")
+        logger.error(f"gdal_calc stderr: {result.stderr}")
+        logger.debug(" ".join(gdal_calc_cmd))
         raise RuntimeError(f"gdal_calc failed for domain from {tif_path}")
 
     if not os.path.exists(tmp_tif):
-        logging.error(f"Temporary file {tmp_tif} not created!")
+        logger.error(f"Temporary file {tmp_tif} not created!")
         raise FileNotFoundError(f"{tmp_tif} not created")
 
     # burn xs_concave_hull
@@ -128,9 +128,9 @@ def create_domain_tif(tif_path: Path, tmp_dir: Path, gpkg_path: Path, dest_dir: 
 
     result = subprocess.run(gdal_rasterize_cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        logging.debug(f"gdal_rasterize stdout: {result.stdout}")
-        logging.error(f"gdal_rasterize stderr: {result.stderr}")
-        logging.debug(" ".join(gdal_rasterize_cmd))
+        logger.debug(f"gdal_rasterize stdout: {result.stdout}")
+        logger.error(f"gdal_rasterize stderr: {result.stderr}")
+        logger.debug(" ".join(gdal_rasterize_cmd))
         raise RuntimeError(f"gdal_rasterize failed for domain {tmp_tif}")
 
     # Translate to COG, COG format can't be created with gdal_calc, or burn value into
@@ -144,12 +144,14 @@ def create_domain_tif(tif_path: Path, tmp_dir: Path, gpkg_path: Path, dest_dir: 
 
     result = subprocess.run(gdal_translate_cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        logging.debug(f"gdal_translate stdout: {result.stdout}")
-        logging.error(f"gdal_translate stderr: {result.stderr}")
-        logging.debug(" ".join(gdal_calc_cmd))
-        logging.debug(" ".join(gdal_rasterize_cmd))
-        logging.debug(" ".join(gdal_translate_cmd))
+        logger.debug(f"gdal_translate stdout: {result.stdout}")
+        logger.error(f"gdal_translate stderr: {result.stderr}")
+        logger.debug(" ".join(gdal_calc_cmd))
+        logger.debug(" ".join(gdal_rasterize_cmd))
+        logger.debug(" ".join(gdal_translate_cmd))
 
+        if os.path.exists(dest_tif):  # clean up
+            os.remove(dest_tif)
         raise RuntimeError(f"gdal_translate failed for {dest_tif}")
 
 
@@ -164,14 +166,13 @@ def fim_worker(args: tuple) -> None:
     try:
         relative_path = tif_path.relative_to(library_dir)
         dest_path = library_extent_dir / relative_path
-
         dest_dir = dest_path.parent
-        # dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_dir.mkdir(parents=True, exist_ok=True)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             create_extent_tif(tif_path, Path(tmp_dir), dest_dir)
     except Exception as e:
-        logging.exception(f"Error processing {tif_path}: {str(e)}")
+        logger.exception(f"Error processing {tif_path}: {str(e)}")
 
 
 def domain_worker(args: tuple) -> None:
@@ -185,15 +186,16 @@ def domain_worker(args: tuple) -> None:
     try:
         tif_path = Path(tif_path)
         gpkg_path = Path(submodels_dir) / reach_id / f"{reach_id}.gpkg"
-
         dest_dir = Path(library_extent_dir) / reach_id
-        # dest_dir.mkdir(parents=True, exist_ok=True)
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            create_domain_tif(tif_path, Path(tmp_dir), gpkg_path, dest_dir)
-
+        if gpkg_path.exists():
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                create_domain_tif(tif_path, Path(tmp_dir), gpkg_path, dest_dir)
+        else:
+            logger.error(f"Missing geopackage for reach {reach_id}: {gpkg_path}")
     except Exception as e:
-        logging.exception(f"Error processing domain {reach_id}: {str(e)}")
+        logger.exception(f"Error processing domain {reach_id}: {str(e)}")
 
 
 def get_all_tif_paths(src_dir: Path) -> list[Path]:
@@ -206,21 +208,7 @@ def get_all_tif_paths(src_dir: Path) -> list[Path]:
     Returns:
         List of Path objects for found TIFF files
     """
-
-    dirs = [src_dir]
-    tifs = []
-
-    while dirs:
-        cur_dir = dirs.pop()
-        items = gdal.ReadDir(cur_dir)
-        if items:
-            for item in items:
-                if item.endswith(".tif"):
-                    tifs.append(cur_dir / item)
-                else:
-                    dirs.append(cur_dir / item)
-
-    return tifs
+    return list(src_dir.rglob("*.tif"))
 
 
 def get_reachid_tif_map(tif_paths: list[Path]) -> dict[str, Path]:
@@ -236,107 +224,45 @@ def get_reachid_tif_map(tif_paths: list[Path]) -> dict[str, Path]:
     return {str(path.parent.parent.name): path for path in tif_paths}
 
 
-def create_extent_lib(
-    src_library,
-    dest_library,
-    submodels_dir,
-    process_count=multiprocessing.cpu_count(),
-    print_progress: bool = False,
-) -> None:
+def create_extent_lib(collection: type[CollectionData], print_progress: bool = False) -> None:
     """
     Main function to create extent library from depth library.
 
     Args:
+        collection: CollectionData object with configuration
         print_progress: Whether to display progress bar
     """
-    logging.debug(f"Process Count: {process_count}")
-    # Process FIM extent files
-    logging.info("Walking through source library")
-    tif_paths = get_all_tif_paths(src_library)
-    logging.info(f"Found {len(tif_paths)} TIFF files in {src_library}")
+    library_dir = Path(collection.library_dir)
+    extent_library_dir = Path(collection.extent_library_dir)
+    submodels_dir = Path(collection.submodels_dir)
+    process_count = collection.config["execution"]["OPTIMUM_PARALLEL_PROCESS_COUNT"]
 
-    logging.info("Processing FIM files")
+    # Process FIM extent files
+    tif_paths = get_all_tif_paths(library_dir)
     with multiprocessing.Pool(process_count) as pool:
         for i, _ in enumerate(
-            pool.imap_unordered(fim_worker, [(p, src_library, dest_library) for p in tif_paths]),
+            pool.imap_unordered(fim_worker, [(p, library_dir, extent_library_dir) for p in tif_paths]),
             1,
         ):
             if print_progress:
                 sys.stdout.write(f"\rProcessing FIMs: {i}/{len(tif_paths)}")
                 sys.stdout.flush()
-            else:
-                if (i + 1) % 100 == 0:
-                    logging.info(f"Processed {i + 1}/{len(tif_paths)}.")
     if print_progress:
         sys.stdout.write("\n")
 
     # Process domain files
-    logging.info("Processing domain files")
     reach_map = get_reachid_tif_map(tif_paths)
     with multiprocessing.Pool(process_count) as pool:
         for i, _ in enumerate(
             pool.imap_unordered(
                 domain_worker,
-                [(rid, p, dest_library, submodels_dir) for rid, p in reach_map.items()],
+                [(rid, p, extent_library_dir, submodels_dir) for rid, p in reach_map.items()],
             ),
             1,
         ):
             if print_progress:
                 sys.stdout.write(f"\rProcessing domains: {i}/{len(reach_map)}")
                 sys.stdout.flush()
-            else:
-                if (i + 1) % 100 == 0:
-                    logging.info(f"Processed {i + 1}/{len(reach_map)}.")
 
     if print_progress:
         sys.stdout.write("\n")
-
-
-def main():
-    """
-    Main function to set up logging and call create_extent_lib.
-    """
-    parser = argparse.ArgumentParser(description="Create extent library from depth library.")
-    parser.add_argument("-src", "--src_library", type=Path, required=True, help="Path to source library")
-    parser.add_argument(
-        "-dst",
-        "--dest_library",
-        type=Path,
-        required=True,
-        help="Path to destination library",
-    )
-    parser.add_argument(
-        "-m",
-        "--submodels_dir",
-        type=Path,
-        required=True,
-        help="Path to submodels directory",
-    )
-    parser.add_argument("-pp", "--print_progress", action="store_true", help="Print progress")
-    parser.add_argument(
-        "-ll",
-        "--log_level",
-        type=str,
-        default="DEBUG",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Logging level",
-    )
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
-
-    # Create extent library
-    create_extent_lib(
-        args.src_library,
-        args.dest_library,
-        args.submodels_dir,
-        print_progress=args.print_progress,
-    )
-    logging.info("Extent library created successfully.")
-
-
-if __name__ == "__main__":
-    main()

@@ -1,0 +1,47 @@
+[workspace]
+name = "ripple1d-pipeline"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+numpy = "<2"
+pandas = "==2.2.2"
+geopandas = "==1.0.1"
+duckdb = "==1.0.0"
+pyarrow = "==17.0.0"
+boto3 = "==1.35.5"
+openpyxl = "==3.1.5"
+pystac-client = "==0.8.3"
+python-dotenv = "==1.0.1"
+pyyaml = "==6.0.2"
+requests = "==2.32.3"
+# GDAL and its Arrow/Parquet driver plugin must be the SAME version.
+# The GDAL 3.10 is the newest whose Parquet driver links against libarrow 17.
+gdal = "3.10.*"
+libgdal-arrow-parquet = "3.10.*"
+ipykernel = "==6.29.5"
+
+[pypi-dependencies]
+ripple1d_pipeline = { path = ".", editable = true }
+
+# Dev-only tooling
+[feature.dev.dependencies]
+ruff = "*"
+
+[feature.dev.tasks]
+lint = { cmd = "ruff check .", default-environment = "dev" }
+format = { cmd = "ruff format .", default-environment = "dev" }
+
+# `dev` is a SUPERSET of default (same runtime + ruff). Use `dev` for all interactive work
+# (VSCode, notebooks, lint); `default` is what runs the pipeline.
+# solve-group keeps both environments on identical shared versions.
+[environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+
+[tasks]
+
+# Ensure flows2fim is in the env prefix (on PATH) on every activation. Idempotent no-op once present.
+[target.win-64.activation]
+scripts = ["pixi-scripts/install_flows2fim.bat"]

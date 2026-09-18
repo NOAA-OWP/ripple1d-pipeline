@@ -8,12 +8,17 @@
 .ipynb_checkpoints/*
 
 *.pyc
-*/__pycache__/*
-*/__pycache__/*
+__pycache__/
 
 .env
 *.lst
 
-# Virtual Environments
+# Environments (pixi manages .pixi/, which self-ignores)
 *.venv
 .vscode/settings.json
+
+# Local data directory
+data/
+
+# Machine-specific config
+/config.yaml

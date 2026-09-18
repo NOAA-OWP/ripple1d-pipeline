@@ -1,0 +1,131 @@
+logging:
+  # Libraries to promote so they follow the main log level. See design_guide.md.
+  FIRST_PARTY:
+    # - botocore
+    # - urllib3
+    # - s3transfer
+
+# Shared tuning values. Payload templates below reference these as {NAME}; the
+# reference is resolved when a request is built, after config.yaml overrides are
+# merged, so overriding a value here applies everywhere it is used.
+ripple_settings:
+  RAS_VERSION: "631"
+  US_DEPTH_INCREMENT: 0.5
+  DS_DEPTH_INCREMENT: 1
+  RESOLUTION: 5.0
+  RESOLUTION_UNITS: "Meters"
+  SOURCE_NETWORK_VERSION: "2.1"
+  SOURCE_NETWORK_TYPE: "nwm_hydrofabric"
+
+processing_steps:
+  conflate_model:
+    domain: "model"
+    api_process_name: "conflate_model"
+    payload_template:
+      source_model_directory: "{source_model_directory}\\{model_id}"
+      model_name: "{model_name}"
+      source_network:
+        file_name: "{source_network}"
+        version: "{SOURCE_NETWORK_VERSION}"
+        type: "{SOURCE_NETWORK_TYPE}"
+      min_flow_multiplier: 0.9
+      max_flow_multiplier: 1.5
+
+  extract_submodel:
+    domain: "reach"
+    api_process_name: "extract_submodel"
+    payload_template:
+      source_model_directory: "{source_model_directory}\\{model_id}"
+      model_name: "{model_name}"
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      nwm_id: "{nwm_reach_id}"
+      min_flow_multiplier_ras: 1
+      max_flow_multiplier_ras: 1.2
+
+  create_ras_terrain:
+    domain: "reach"
+    api_process_name: "create_ras_terrain"  # Different api_process_name
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      resolution: "{RESOLUTION}"
+      resolution_units: "{RESOLUTION_UNITS}"
+      terrain_source_url: "{terrain_source_url}"
+      terrain_agreement_ignore_error: True
+
+  create_model_run_normal_depth:
+    domain: "reach"
+    api_process_name: "create_model_run_normal_depth"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plan_suffix: "ind"
+      num_of_discharges_for_initial_normal_depth_runs: 15
+      ras_version: "{RAS_VERSION}"
+
+  run_incremental_normal_depth:
+    domain: "reach"
+    api_process_name: "run_incremental_normal_depth"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plan_suffix: "nd"
+      depth_increment: "{US_DEPTH_INCREMENT}"
+      ras_version: "{RAS_VERSION}"
+
+  nd_create_scenarios_db:
+    domain: "reach"
+    api_process_name: "create_scenarios_db"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plans: ["nd"]
+
+  run_iknown_wse:
+    domain: "reach"
+
+  ikwse_create_scenarios_db:
+    domain: "reach"
+
+  run_known_wse:
+    domain: "reach"
+    api_process_name: "run_known_wse"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plan_suffix: "kwse"
+      min_elevation_curve: [[-9999, -9999]]
+      max_elevation: -9999
+      depth_increment: "{DS_DEPTH_INCREMENT}"
+      ras_version: "{RAS_VERSION}"
+      write_depth_grids: True
+
+  kwse_create_scenarios_db:
+    domain: "reach"
+    api_process_name: "create_scenarios_db"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plans: ["kwse"]
+
+  create_fim_lib:
+    domain: "reach"
+    api_process_name: "create_fim_lib"
+    payload_template:
+      submodel_directory: "{submodels_directory}\\{nwm_reach_id}"
+      plans:
+        - nd
+        - kwse
+      resolution: "{RESOLUTION}"
+      resolution_units: "{RESOLUTION_UNITS}"
+      library_directory: "{library_directory}"
+      cleanup: True
+      cog: True
+
+bridge_processing:
+  BRIDGE_ELEV_UNITS: "meters"
+  BRIDGE_ELEV_CONV_FACTOR: 3.28084  # Convert bridge elevation units to feet (units used by terrain and depth grids)
+
+polling:
+  DEFAULT_POLL_WAIT: 5
+  API_LAUNCH_JOBS_RETRY_WAIT: 0.5
+
+database:
+  DB_CONN_TIMEOUT: 30
+
+execution:
+  STOP_ON_ERROR: False

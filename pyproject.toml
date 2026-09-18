@@ -1,0 +1,43 @@
+# Required only so the package can be built for the editable install.
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ripple1d_pipeline"
+# Version is drived from git tags
+dynamic = ["version"]
+description = "Workflow that uses Ripple1d to generate FIMs and scenario databases."
+requires-python = ">=3.12,<3.13"
+# Runtime dependencies are managed by pixi (conda-forge). Kept empty so the
+# editable self-install does not pull PyPI copies of conda-provided packages.
+dependencies = []
+
+# Version comes from git tags. tag_regex ignores the non-semver tags (e.g. vfim100-production).
+[tool.hatch.version]
+source = "vcs"
+raw-options = { tag_regex = '^v(?P<version>\d+\.\d+\.\d+(?:[._-]?\w+(?:\.\d+)*)?)$' }
+
+[tool.hatch.build.targets.wheel]
+packages = ["ripple1d_pipeline"]
+
+[tool.ruff]
+line-length = 120     # wider than Ruff's 88 default
+
+[tool.ruff.lint]
+# Ruff's defaults (E4, E7, E9, F) plus:
+extend-select = [
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ripple1d_pipeline"]
+
+[tool.ruff.lint.per-file-ignores]
+# Entry points and notebooks intentionally use `from ripple1d_pipeline.x import *` to pull in
+# the pipeline's building blocks. ruff cannot resolve names through a star import.
+"entrypoints/*.py" = ["F403", "F405"]
+"notebooks/*.ipynb" = ["F403", "F405"]
+"**/__init__.py" = ["F401", "F403"]

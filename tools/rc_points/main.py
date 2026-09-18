@@ -6,10 +6,9 @@ import argparse
 import json
 import logging
 import os
-import shutil
 import sqlite3
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import geopandas as gpd
 import pandas as pd
@@ -18,7 +17,7 @@ import pandas as pd
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         log_record = {
-            "time": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "time": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "msg": record.getMessage(),
         }
@@ -41,7 +40,13 @@ def setup_logging():
 
 
 def download_collection_data(collection_id: str, s3_root_dir) -> None:
-    aws_cmd = ["aws", "s3", "cp", f"{s3_root_dir}/{collection_id}/ripple.gpkg", f"./{collection_id}/ripple.gpkg"]
+    aws_cmd = [
+        "aws",
+        "s3",
+        "cp",
+        f"{s3_root_dir}/{collection_id}/ripple.gpkg",
+        f"./{collection_id}/ripple.gpkg",
+    ]
     subprocess.run(aws_cmd, check=True)
 
     aws_cmd = [
@@ -75,7 +80,8 @@ def create_rc_points_parquet(ripple_gpkg_path, submodels_dir, output_parquet_pat
         with sqlite3.connect(ripple_gpkg_path) as conn:
             models_df = pd.read_sql("SELECT model_id, reach_id FROM processing;", conn)
             us_rcs_df = pd.read_sql(
-                "SELECT reach_id, us_flow, us_wse FROM rating_curves WHERE boundary_condition = 'nd';", conn
+                "SELECT reach_id, us_flow, us_wse FROM scenarios WHERE boundary_condition = 'nd';",
+                conn,
             )
     except Exception as e:
         logging.error(f"Error reading base datasets: {str(e)}")
@@ -130,7 +136,7 @@ def create_rc_points_parquet(ripple_gpkg_path, submodels_dir, output_parquet_pat
             )
 
         except Exception as e:
-            logging.error(f"Error processing {reach_dir}: {str(e)}")
+            logging.exception(f"Error processing {reach_dir}: {str(e)}")
             continue
 
     if not features:
@@ -172,9 +178,19 @@ def parse_arguments():
         """,
     )
     parser.add_argument(
-        "-root", "--s3_root_prefix", required=True, type=str, help="Directory path collections folder on S3."
+        "-root",
+        "--s3_root_prefix",
+        required=True,
+        type=str,
+        help="Directory path collections folder on S3.",
     )
-    parser.add_argument("-o", "--s3_output_prefix", required=True, type=str, help="Directory path for output data.")
+    parser.add_argument(
+        "-o",
+        "--s3_output_prefix",
+        required=True,
+        type=str,
+        help="Directory path for output data.",
+    )
     parser.add_argument(
         "-c",
         "--collection_id",

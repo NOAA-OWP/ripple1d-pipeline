@@ -29,7 +29,6 @@ def list_collections(stac_endpoint):
         mip_collections = []
         for c in collections:
             if c.id.startswith("ble"):
-
                 ble_collections.append(
                     Collection(
                         c.id,
@@ -60,8 +59,8 @@ def list_collections(stac_endpoint):
             for collection in mip_collections:
                 writer.writerow([collection.id, collection.models_1d, collection.miles_1d])
 
-        print(f"Wrote BLE collections to ble_collections.csv")
-        print(f"Wrote MIP collections to mip_collections.csv")
+        print("Wrote BLE collections to ble_collections.csv")
+        print("Wrote MIP collections to mip_collections.csv")
 
     except Exception as e:
         print(f"Error fetching collections: {e}")

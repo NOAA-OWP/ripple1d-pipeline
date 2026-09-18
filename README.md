@@ -1,167 +1,163 @@
 # Ripple1D Pipeline
- 
-Ripple1D Pipeline is a workflow that utilizes the [Ripple1d](https://github.com/Dewberry/ripple1d) to generate FIMs and rating curves. 
-Compatible with ripple1d==0.10.4. Use repository tags to get older versions.
+
+Ripple1D Pipeline is a workflow that utilizes the [Ripple1d](https://github.com/NGWPC/ripple1d) to generate FIMs for difference scenarios.
+
+Compatible with [ripple1d v0.11.0](https://github.com/NGWPC/ripple1d/releases/tag/v0.11.0). Use repository tags to get older versions.
+
+For *why* the project is designed the way it is, see [design_guide.md](design_guide.md).
 
 ## Contents
-- [Initialization/Pre Processing source code](src/setup)
-- [Ripple1d API Calls/Processing source code](src/process)
-- [Quality Control/Post Processing source code](src/qc)
 
+- [`ripple1d_pipeline/`](ripple1d_pipeline) -  the pipeline package
+    - [setup](ripple1d_pipeline/setup) -  initialization / pre-processing
+    - [process](ripple1d_pipeline/process) -  Ripple1d API calls / processing
+    - [qc](ripple1d_pipeline/qc) -  quality control / post-processing
+- [`entrypoints/`](entrypoints) -  scripts that run the pipeline
+- [`notebooks/`](notebooks) -  notebooks that run the pipeline, step by step
+- [`tools/`](tools) -  independent tools, not used by the pipeline
+- [`pixi-scripts/`](pixi-scripts) -  environment provisioning invoked by pixi
 
 ## Dependencies
- - Windows environment with Desktop Experience (GUI, not headless Windows)
- - Python version >=3.10 
- - [Ripple1d](https://github.com/Dewberry/ripple1d)
- - HEC-RAS (v6.3.1)
- - GDAL
- - [Flows2fim](https://github.com/ar-siddiqui/flows2fim) (if creating composite rasters)
- - AWS profile in `~\.aws\config` which includes valid AWS credentials (access key id and secret access key).
+
+pixi manages Python, GDAL, and flows2fim. The rest must be installed separately:
+
+- Windows environment with Desktop Experience (GUI, not headless Windows, not non logged in sessions)
+- [pixi](https://pixi.sh)
+- HEC-RAS (v6.3.1)
+- [Ripple1d](https://github.com/NGWPC/ripple1d) server (runs in its own environment)
+- AWS credentials (access key id and secret access key) for pulling models from STAC
+- Reference data (DEM, NWM flowlines, flow files) on disk
 
 ## Getting Started
 
-### 1. **Checkout the Repo**
-   - Clone this repository to your local machine.  
-   ```git clone https://gitlab.sh.nextgenwaterprediction.com/NGWPC/ripple1d-pipeline C:\Users\<username>\Downloads\ripple1d-pipeline```
+Run all steps from the Windows Command Prompt (`cmd`), not PowerShell.
 
+### 1. Install pixi
 
-### 2. **Create a Virtual Environment**
-   - Create a virtual environment in Python:
-     - **Windows:**
-     ```Powershell
-     cd C:\venvs *OR* mkdir C:\venvs 
-     python3 -m venv ripple1d_pipeline
-     ```
-     - **Linux**
-     ```bash
-     mkdir -p /venvs && cd /venvs
-     python3 -m venv ripple1d_pipeline
-     ```
+```cmd
+powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+```
 
-### 3. **Activate the Virtual Environment**
-   - **Windows:**
-     ```Powershell
-     ripple1d_pipeline\Scripts\activate
-     ```
-   - **Linux:**
-     ```bash
-     source ripple1d_pipeline/bin/activate
-     ```
+Reopen the terminal afterwards so `pixi` is on your PATH.
 
-### 4. **Navigate to the Root of the Repo**
-   - Use your terminal to navigate to the root folder of the repository:
-   - **Windows:**
-     ```Powershell
-     cd /d <path\to\your\repo from step 1>
-     ```
-   - **Linux:**
-     ```bash
-     cd <path/to/your/repo from step 1>
-     ```
+### 2. Clone the repo
 
-### 5. **Install Requirements**
-   - Install the necessary dependencies in your virtual environment:
-     ```bash
-     pip install -r requirements.txt
-     ```
+```cmd
+git clone https://github.com/NGWPC/ripple1d-pipeline.git
+cd ripple1d-pipeline
+```
 
-### 6. **Set up and start Ripple1D Server** 
-The Ripple1d server must be installed and ran on a windows machine, with HEC-Ras installed.   
-   - Create ripple1d virtual environment, activate, install ripple1d, start ripple1d.
-      ```Powershell
-      cd /d C:\venvs
-      python3 -m venv ripple1d_<ripple1d version>
-      cd ripple1d_<ripple1d version>
-      .\Scripts\activate
-      pip install ripple1d==<ripple1d version>
-      ripple1d start --thread_count <number less than total available CPUs>
-      ```
-If the last command is successful, two new terminal windows will appear (Huey consumer and Flask api), which can be minimized. 
+### 3. Create the environment
 
-### 7. **Install GDAL**
-The easiest way is to download the [OSGeo4W network installer](https://download.osgeo.org/osgeo4w/v2/osgeo4w-setup.exe), this aligns with the current default paths listed in `config.yaml`.
+```cmd
+pixi install
+```
 
-### 8. **Install flows2fim**
-1. Download the [flows2fim zip](https://github.com/ar-siddiqui/flows2fim/releases/download/v0.2.1/flows2fim-windows-amd64.zip)
-2. Extract the .zip file's contents to `C:\OSGeo4W\bin\`
+This installs Python, all Python dependencies, and the GDAL command-line tools into a project-local environment, and registers the `ripple1d_pipeline` package into it. There is no virtual environment to create or activate separately, `pixi run <command>` activates it automatically.
 
-   ###  **Pull flow files**
-   ```Powershell
-   mkdir C:\reference_data\flow_files
-   aws s3 sync s3://fimc-data/reference/nwm_return_period_flows C:\reference_data\flow_files
-   ```
+### 4. Configure (see [Configuration](#configuration) below as well)
 
-### 9. **Install HEC-RAS**
+Copy `example.env` to `.env` and fill in the values for your machine.
+
+### 5. Pull reference data
+
+```cmd
+mkdir C:\reference_data\flow_files
+aws s3 sync s3://fimc-data/reference/nwm_return_period_flows C:\reference_data\flow_files
+```
+
+The DEM and NWM flowline paths are also set in `.env`.
+
+### 6. Install HEC-RAS
+
 1. Download the [HEC-RAS v631 Setup executable](https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/1.0.26/HEC-RAS_631_Setup.exe)
-2. Follow the install instructions, all default. 
-3. Open HEC-RAS once to accept the Terms and Conditions. 
+2. Follow the install instructions, all default.
+3. Open HEC-RAS once to accept the Terms and Conditions.
 
-### Notes on Setup:
-- Using a Linux Operating System is untested.
-- It is highly recommended to run all steps using the Windows Command Prompt Application, not the Windonws PowerShell application.
+### 7. Set up and start the Ripple1D server
+
+The Ripple1d server runs in its **own** environment (it is not managed by this project's pixi environment) and must run on a Windows machine with HEC-RAS installed.
+
+```cmd
+mkdir C:\venvs
+cd /d C:\venvs
+python -m venv ripple1d
+cd ripple1d
+Scripts\activate.bat
+pip install git+https://github.com/NGWPC/ripple1d.git@v0.11.0
+ripple1d start --thread_count <number less than total available CPUs>
+```
+
+If the last command is successful, two new terminal windows will appear (Huey consumer and Flask api), which can be minimized.
 
 ## **Configuration**
-### Environment file
-An `example.env` file is included within the root directory. First, make a copy of `example.env`, naming it `.env`. Then, update the values in the `.env` file.
 
-### Configuration file 
+### 1. Environment file (`.env`) - required machine/environment specific settings
 
-The `config.yaml` file in the `/src` directory contains all other necessary configuration parameters. Please ensure filepaths, timeouts, endpoints, etc are up to date for your machine, and if not, modify the file to suit your specific requirements. 
+Copy `example.env` to `.env` and fill in the values for your machine:
 
+`.env` holds everything that varies per environment, as `RP_*` variables.
 
-## **Using `batch_ripple_pipeline.py` or `ripple_pipeline.py`**
+### 2. Behavior config
 
-The automation of the whole pipeline can be accomplished using one of two scripts. `ripple_pipeline.py` is used to process a single colelction, identically to the Jupyter Notebook steps. `batch_ripple_pipeline.py` is a wrapper around `ripple_pipeline.py` which will serially process a list (or single) of collections, as well as push the data to a specified S3 bucket. 
+The source code has `/ripple1d_pipeline/default_config.yaml` file that has all defaults configs that alter behavior of pipeline.
 
-For Example:
-```Powershell
-(ripple1d_pipeline) C:\Users\<user name>\ripple1d_pipeline>python .\ripple_pipeline.py -c mip_02060004
+To change a behavior value **just for your machine** copy `config.example.yaml` to `config.yaml` at the repo root and uncomment the keys you want to override. These settings are deep-merged over the defaults.
+
+## Running the pipeline
+
+Everything runs through `pixi run`, which activates the environment before running any command. No activation step is needed separately.
+
+**A single collection:**
+
+```cmd
+pixi run python entrypoints/run_collection.py -c mip_02020008
 ```
 
-or 
+**A list of collections** (serially, plus pushing results to S3):
 
-```Powershell
-(ripple1d_pipeline) C:\Users\<user name>\ripple1d_pipeline>python .\batch_ripple_pipeline.py -l "C:\collection_lists\test_collections.lst"
+```cmd
+pixi run python entrypoints/run_batch.py -l "C:\collection_lists\test_collections.lst"
 ```
 
-## **Using Jupyter Notebooks**
+Both accept `--log-level` (and `--third-party-log-level`); these can also be set via `RP_LOG_LEVEL` and `RP_THIRD_PARTY_LOG_LEVEL` in `.env`.
 
-### 1. **Access Notebooks**
-   - **Option 1: Using VSCode**
-     1. Open the notebook in VSCode.
-     2. Point the kernel to the IPython kernel in your virtual environment.
+## Using Jupyter Notebooks
 
-   - **Option 2: Using Jupyter Lab**
-     1. Start Jupyter Lab from your virtual environment:
-        ```bash
-        jupyter lab
-        ```
-     2. Open `localhost:8888` in your browser to access Jupyter Lab and open the notebooks.
+The notebooks in [`notebooks/`](notebooks) do the same work as `run_collection.py`, but provide more user control.
 
-### 2. **Update Notebooks Parameters**
-   - In the parameters cell of the notebooks, define the `collection_name` variable to the collection you'd like to process.
+1. Open the repo in VSCode and open `notebooks/setup.ipynb`.
+2. **Select Kernel** → the pixi environment (`.pixi\envs\dev\python.exe`). Use the `dev` environment: it has everything the pipeline needs plus the dev tooling.
+3. In the *Parameters* cell, set `collection_name` to the collection you want to process.
+4. Run `setup.ipynb` first, then `process.ipynb`, then `qc.ipynb`.
+5. (Optional) Export the executed notebooks as HTML into the collection's working folder and send for quality review.
 
-### 3. **Execute and Export Notebooks as HTML**
-   - Execute `setup_<collection_name>.ipynb` first and then `process_<collection_name>.ipynb` and finally `qc_<collection_name>.ipynb`
-   - Once the notebooks are executed, export them as HTML files and move them into the working folder created for the collection.
+## Development
 
-### 4. **(Optional) Send for Quality Review**
-   - After exporting, send the entire working folder for quality review.
+```cmd
+pixi run lint      # ruff check .
+pixi run format    # ruff format .
+```
+
+These run in the `dev` environment, which is the `default` environment plus ruff.
 
 ## Outputs
+
 Following outputs are produced for each batch that is processed:
 
 `source_models`: Folder containing source models data, which were conflated and used as source for creating submodels for NWM reaches
 
 `submodels`: Folders for extracted HEC-RAS submodels for NWM reaches that are used to create FIMs
 
-`library`: Folder containing FIM rasters per reach and per flow and downstream boundary condition
+`library`: Folder containing FIM depth rasters per reach and per flow and downstream boundary condition
 
-`qc`: Folder containing data to evaluate quality of produced FIM library and rating curves
+`library_extent`: Folder containing FIM extent rasters per reach and per flow and downstream boundary condition
+
+`qc`: Folder containing data to evaluate quality of produced FIM library and scenarios
 
 `error_report.xlsx`: Provide insight into the errors encountered during processing of each step
 
-`ripple.gpkg`: Geopackage (SQLITE Database) containing records for reaches, models and rating curves
+`ripple.gpkg`: Geopackage (SQLITE Database) containing records for reaches, models and scenarios
 
 `start_reaches.csv`: Flows2FIM start file which can be used to create composite FIMs using Flows2FIM software
 

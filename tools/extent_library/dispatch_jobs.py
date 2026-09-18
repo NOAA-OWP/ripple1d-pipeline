@@ -51,7 +51,7 @@ def dispatch_job(
             logging.error(f"Response details: {e.response.status_code} - {e.response.text}")
         return ""
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {str(e)}")
+        logging.exception(f"An unexpected error occurred: {str(e)}")
         return ""
 
 
@@ -77,17 +77,20 @@ def main():
     )
     args = parser.parse_args()
 
-    logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
 
     # Read collection names from the file
     try:
-        with open(args.collection_list, "r") as file:
+        with open(args.collection_list) as file:
             collection_list = [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
         logging.error(f"Collection list file not found: {args.collection_list}")
         return
     except Exception as e:
-        logging.error(f"An error occurred while reading the collection list: {str(e)}")
+        logging.exception(f"An error occurred while reading the collection list: {str(e)}")
         return
 
     # Prepare CSV file to save results

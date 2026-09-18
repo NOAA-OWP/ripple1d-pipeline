@@ -4,9 +4,8 @@ import argparse
 import json
 import logging
 import os
-import shutil
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import duckdb
 import geopandas as gpd
@@ -16,7 +15,7 @@ from shapely import wkb
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         log_record = {
-            "time": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "time": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "msg": record.getMessage(),
         }
@@ -39,7 +38,13 @@ def setup_logging():
 
 
 def download_collection_data(collection_id: str, s3_root_dir) -> None:
-    aws_cmd = ["aws", "s3", "cp", f"{s3_root_dir}/{collection_id}/ripple.gpkg", f"./{collection_id}/ripple.gpkg"]
+    aws_cmd = [
+        "aws",
+        "s3",
+        "cp",
+        f"{s3_root_dir}/{collection_id}/ripple.gpkg",
+        f"./{collection_id}/ripple.gpkg",
+    ]
     subprocess.run(aws_cmd, check=True)
 
     aws_cmd = [
@@ -160,7 +165,7 @@ def create_rc_points_parquet(ripple_gpkg_path, submodels_dir, output_parquet_pat
             conn.execute(query)
 
         except Exception as e:
-            logging.error(f"Skipping {reach_id} due to error: {str(e)}")
+            logging.exception(f"Skipping {reach_id} due to error: {str(e)}")
             continue
 
         # finally:
@@ -174,7 +179,7 @@ def create_rc_points_parquet(ripple_gpkg_path, submodels_dir, output_parquet_pat
                 reach_id,
                 us_flow AS flow_cfs,
                 ROUND(us_wse / 3.28084, 2) AS wse_m,
-            FROM sqlite_scan('{ripple_gpkg_path}', 'rating_curves')
+            FROM sqlite_scan('{ripple_gpkg_path}', 'scenarios')
             WHERE boundary_condition = 'nd'
             );"""
     )
@@ -237,9 +242,19 @@ def parse_arguments():
         """,
     )
     parser.add_argument(
-        "-root", "--s3_root_prefix", required=True, type=str, help="Directory path collections folder on S3."
+        "-root",
+        "--s3_root_prefix",
+        required=True,
+        type=str,
+        help="Directory path collections folder on S3.",
     )
-    parser.add_argument("-o", "--s3_output_prefix", required=True, type=str, help="Directory path for output data.")
+    parser.add_argument(
+        "-o",
+        "--s3_output_prefix",
+        required=True,
+        type=str,
+        help="Directory path for output data.",
+    )
     parser.add_argument(
         "-c",
         "--collection_id",
